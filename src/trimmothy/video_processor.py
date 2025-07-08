@@ -8,6 +8,7 @@ providing better reliability and performance than MoviePy.
 import subprocess
 import json
 import shutil
+import sys
 from pathlib import Path
 from typing import Dict, Tuple, Optional, Callable
 import tempfile
@@ -22,18 +23,56 @@ class VideoProcessor:
         self.ffprobe_path = self._find_ffprobe()
         
     def _find_ffmpeg(self) -> str:
-        """Find FFmpeg executable path."""
+        """Find FFmpeg executable path, preferring bundled version."""
+        # First try to find bundled FFmpeg (for packaged app)
+        bundled_path = self._get_bundled_ffmpeg_path()
+        if bundled_path and os.path.exists(bundled_path):
+            return bundled_path
+        
+        # Fall back to system FFmpeg
         ffmpeg_path = shutil.which('ffmpeg')
         if not ffmpeg_path:
-            raise RuntimeError("FFmpeg not found. Please install FFmpeg.")
+            raise RuntimeError(
+                "FFmpeg not found. Please install FFmpeg with: brew install ffmpeg"
+            )
         return ffmpeg_path
         
     def _find_ffprobe(self) -> str:
-        """Find FFprobe executable path."""
+        """Find FFprobe executable path, preferring bundled version."""
+        # First try to find bundled FFprobe (for packaged app)
+        bundled_path = self._get_bundled_ffprobe_path()
+        if bundled_path and os.path.exists(bundled_path):
+            return bundled_path
+        
+        # Fall back to system FFprobe
         ffprobe_path = shutil.which('ffprobe')
         if not ffprobe_path:
-            raise RuntimeError("FFprobe not found. Please install FFmpeg.")
+            raise RuntimeError(
+                "FFprobe not found. Please install FFmpeg with: brew install ffmpeg"
+            )
         return ffprobe_path
+    
+    def _get_bundled_ffmpeg_path(self) -> str:
+        """Get path to bundled FFmpeg binary."""
+        if getattr(sys, 'frozen', False):
+            # Running as packaged app
+            app_dir = Path(sys.executable).parent
+            return str(app_dir / "ffmpeg")
+        else:
+            # Running in development
+            project_root = Path(__file__).parent.parent.parent
+            return str(project_root / "resources" / "bin" / "ffmpeg")
+    
+    def _get_bundled_ffprobe_path(self) -> str:
+        """Get path to bundled FFprobe binary."""
+        if getattr(sys, 'frozen', False):
+            # Running as packaged app
+            app_dir = Path(sys.executable).parent
+            return str(app_dir / "ffprobe")
+        else:
+            # Running in development
+            project_root = Path(__file__).parent.parent.parent
+            return str(project_root / "resources" / "bin" / "ffprobe")
     
     def get_video_info(self, video_path: str) -> Dict:
         """
