@@ -2,7 +2,7 @@
 name = "trimmothy"
 version = "0.1.0"
 description = "A simple and elegant video trimming application for macOS"
-authors = ["Your Name <you@example.com>"]
+authors = ["Ryan Taito <ryantaito@gmail.com>"]
 readme = "README.md"
 packages = [{include = "trimmothy", from = "src"}]
 
