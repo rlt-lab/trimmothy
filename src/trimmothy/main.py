@@ -8,6 +8,8 @@ import os
 import threading
 import time
 import tempfile
+import subprocess
+import platform
 from pathlib import Path
 
 # Import our modular components
@@ -61,7 +63,7 @@ class TrimmothyApp:
         self.start_time_var = None
         self.end_time_var = None
         self.play_button = None
-        self.current_time_label = None
+
         self.start_time_display = None
         self.end_time_display = None
         self.thumbnail_frame = None
@@ -130,13 +132,6 @@ class TrimmothyApp:
             width=100
         )
         self.play_button.pack(side="left", padx=10, pady=10)
-        
-        # Current time display
-        self.current_time_label = ctk.CTkLabel(
-            video_controls_frame,
-            text="00:00:00"
-        )
-        self.current_time_label.pack(side="left", padx=(10, 5), pady=10)
         
         # Video progress slider with thumbnails
         progress_frame = ctk.CTkFrame(left_frame)
@@ -334,8 +329,6 @@ class TrimmothyApp:
                 self.start_time_display.configure(text="00:00:00")
             if self.end_time_display:
                 self.end_time_display.configure(text=self.seconds_to_time_string(self.video_duration))
-            if self.current_time_label:
-                self.current_time_label.configure(text="00:00:00")
             
             # Update trim info label
             self.update_trim_info_label()
@@ -347,7 +340,7 @@ class TrimmothyApp:
             self.generate_thumbnails()
             self.display_thumbnails()
             
-            messagebox.showinfo("Success", "Video loaded successfully!")
+
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load video: {str(e)}")
@@ -397,10 +390,10 @@ class TrimmothyApp:
             self.current_frame = frame_number
             self.display_frame(frame_number)
             
-            # Update current time display
+            # Update current time display (using start time display on timeline)
             current_time = frame_number / self.fps if self.fps > 0 else 0
-            if self.current_time_label:
-                self.current_time_label.configure(text=self.seconds_to_time_string(current_time))
+            if self.start_time_display:
+                self.start_time_display.configure(text=self.seconds_to_time_string(current_time))
             
     def toggle_playback(self):
         """Toggle video playback"""
@@ -459,10 +452,10 @@ class TrimmothyApp:
         self.display_frame(self.current_frame)
         self.progress_slider.set(self.current_frame)
         
-        # Update current time display
+        # Update current time display (using start time display on timeline)
         current_time = self.current_frame / self.fps if self.fps > 0 else 0
-        if self.current_time_label:
-            self.current_time_label.configure(text=self.seconds_to_time_string(current_time))
+        if self.start_time_display:
+            self.start_time_display.configure(text=self.seconds_to_time_string(current_time))
         
         # Schedule next frame
         delay = int(1000 / self.playback_speed)  # Convert to milliseconds
@@ -648,10 +641,10 @@ class TrimmothyApp:
         self.progress_slider.set(target_frame)
         self.display_frame(target_frame)
         
-        # Update time displays
+        # Update time displays (using start time display on timeline)
         current_time = target_frame / self.fps
-        if self.current_time_label:
-            self.current_time_label.configure(text=self.seconds_to_time_string(current_time))
+        if self.start_time_display:
+            self.start_time_display.configure(text=self.seconds_to_time_string(current_time))
         
     def preview_trim(self):
         """Preview the selected trim by playing the trimmed section"""
@@ -674,9 +667,9 @@ class TrimmothyApp:
             self.progress_slider.set(start_frame)
             self.display_frame(start_frame)
             
-            # Update current time display
-            if self.current_time_label:
-                self.current_time_label.configure(text=self.seconds_to_time_string(self.trim_start))
+            # Update current time display (using start time display on timeline)
+            if self.start_time_display:
+                self.start_time_display.configure(text=self.seconds_to_time_string(self.trim_start))
             
             # Start playback (it will automatically stop at end during normal playback)
             self.play_video()
@@ -797,11 +790,9 @@ class TrimmothyApp:
                         # Small delay to show completion
                         progress_window.after(500, progress_window.destroy)
                         
-                        # Show success message
+                        # Show success message with option to open location
                         duration = seconds_to_time_string(self.trim_end - self.trim_start)
-                        self.root.after(600, lambda: messagebox.showinfo("Success", 
-                            f"Video trimmed and saved successfully!\n\nLocation: {output_path}\n"
-                            f"Duration: {duration}"))
+                        self.root.after(600, lambda: self.show_success_dialog(output_path, duration))
                     else:
                         raise Exception("Video processing failed")
                     
@@ -843,6 +834,64 @@ class TrimmothyApp:
             
         except Exception as e:
             messagebox.showerror("Error", f"Failed to start trimming: {str(e)}")
+    
+    def show_success_dialog(self, output_path, duration):
+        """Show success dialog with option to open file location"""
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title("Success")
+        dialog.geometry("500x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center the dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (500 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+        dialog.geometry(f"500x200+{x}+{y}")
+        
+        # Success message
+        message_label = ctk.CTkLabel(
+            dialog,
+            text=f"Video trimmed and saved successfully!\n\nLocation: {output_path}\nDuration: {duration}",
+            font=ctk.CTkFont(size=14),
+            justify="center"
+        )
+        message_label.pack(pady=20)
+        
+        # Buttons frame
+        buttons_frame = ctk.CTkFrame(dialog)
+        buttons_frame.pack(pady=20)
+        
+        def open_location():
+            """Open the file location in the system file manager"""
+            try:
+                file_path = Path(output_path)
+                if platform.system() == "Darwin":  # macOS
+                    subprocess.run(["open", "-R", str(file_path)])
+                elif platform.system() == "Windows":
+                    subprocess.run(["explorer", "/select,", str(file_path)])
+                else:  # Linux
+                    subprocess.run(["xdg-open", str(file_path.parent)])
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not open file location: {str(e)}")
+        
+        # Open Location button
+        open_button = ctk.CTkButton(
+            buttons_frame,
+            text="Open Location",
+            command=lambda: [open_location(), dialog.destroy()],
+            width=120
+        )
+        open_button.pack(side="left", padx=10)
+        
+        # OK button
+        ok_button = ctk.CTkButton(
+            buttons_frame,
+            text="OK",
+            command=dialog.destroy,
+            width=80
+        )
+        ok_button.pack(side="left", padx=10)
             
     def run(self):
         """Start the application"""
