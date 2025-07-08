@@ -13,8 +13,8 @@ import platform
 from pathlib import Path
 
 # Import our modular components
-from .video_processor import VideoProcessor
-from .utils import (
+from trimmothy.video_processor import VideoProcessor
+from trimmothy.utils import (
     seconds_to_time_string, 
     time_string_to_seconds, 
     validate_time_range,
